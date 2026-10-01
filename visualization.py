@@ -23,8 +23,8 @@ TODO:
 Import
 """
 from gen_data import gen_case, gen_load
-from src.case14.coordinate import *
-from pypower.api import case14
+from src.case30.coordinate import *
+from pypower.api import case30
 from pypower.idx_brch import RATE_A, PF, BR_X
 from pypower.idx_bus import PD
 from pypower.idx_gen import PG, QG
@@ -64,7 +64,7 @@ class case_display:
         self.opf_idx = 0                                       # The number of run of opf
         self.flow_limit = case_env.case['branch'][:,RATE_A]    # The limit of active flow on each line
         self.is_pause = False
-        self.att_choice = ['No Attack', 'Random Attack', 'FDI Attack']
+        self.att_choice = ['无攻击', '随机攻击', 'FDI攻击']
         self.att_select = tk.StringVar()
         self.att_select.set(self.att_choice[0])   # Set the defaut as 'No Attack'
 
@@ -118,7 +118,7 @@ class case_display:
         self.wait_time = 1000                   # Interval between two opf (in ms)
         self.color_no = 256                     # The number of colors used in the branch loading rate
         self.color_name = 'viridis'
-        self.font = 'Arial'
+        self.font = '微软雅黑'
         self.font_title = (self.font, 20, 'bold')
         self.font_section = (self.font, 13, 'bold')
         self.font_label = (self.font, 11)
@@ -130,7 +130,8 @@ class case_display:
         self.font_panel_button = (self.font, 13, 'bold')
         self.font_panel_footer = (self.font, 10)
         self.font_grid = (self.font, 11, 'bold')
-        self.font_grid_small = (self.font, 10, 'bold')
+        self.font_grid_small = (self.font, 8, 'bold')
+        self.line_text_threshold = 10   # Hide branch-flow text below this percent
         self.palette = {
             'bg': '#eef1f4',
             'panel': '#ffffff',
@@ -152,13 +153,16 @@ class case_display:
             'idle_fg': '#465461',
         }
         matplotlib.rcParams['lines.linewidth'] = 2    # Matplotlib settings
+        matplotlib.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'Arial']
+        matplotlib.rcParams['axes.unicode_minus'] = False
         matplotlib.rc('xtick', labelsize=10)
         matplotlib.rc('ytick', labelsize=10)
 
         self.residual_plot_len = 15             # The No. of residuals show at the same time in the residual plot
 
         self.display_window.configure(bg=self.palette['bg'])
-        self.display_window.minsize(1060, 720)
+        self.display_window.geometry('1280x760')
+        self.display_window.minsize(1120, 720)
         self._configure_style()
 
         self.app_frame = tk.Frame(self.display_window, bg=self.palette['bg'], padx=10, pady=10)
@@ -174,7 +178,7 @@ class case_display:
 
         self.title_label = tk.Label(
             self.header_frame,
-            text='IEEE 14-Bus System',
+            text='30节点国内区域电网模拟平台',
             font=self.font_title,
             bg=self.palette['bg'],
             fg=self.palette['text'],
@@ -186,6 +190,10 @@ class case_display:
         self.run_status_label.grid(row=0, column=1, padx=(6, 0))
         self.bdd_status_label = tk.Label(self.header_frame, font=self.font_badge, padx=8, pady=4)
         self.bdd_status_label.grid(row=0, column=2, padx=(6, 0))
+        self.attack_status_label = tk.Label(self.header_frame, font=self.font_badge, padx=8, pady=4)
+        self.attack_status_label.grid(row=0, column=3, padx=(6, 0))
+        self.mtd_status_label = tk.Label(self.header_frame, font=self.font_badge, padx=8, pady=4)
+        self.mtd_status_label.grid(row=0, column=4, padx=(6, 0))
         self.opf_label = tk.Label(
             self.header_frame,
             text='OPF 0',
@@ -193,7 +201,7 @@ class case_display:
             bg=self.palette['bg'],
             fg=self.palette['muted'],
         )
-        self.opf_label.grid(row=0, column=3, padx=(10, 0))
+        self.opf_label.grid(row=0, column=5, padx=(10, 0))
 
         self.content_frame = tk.Frame(self.app_frame, bg=self.palette['bg'])
         self.content_frame.grid(row=1, column=0, sticky='nsew')
@@ -217,17 +225,13 @@ class case_display:
         self.grid_header.columnconfigure(0, weight=1)
         tk.Label(
             self.grid_header,
-            text='Grid State',
+            text='电网状态',
             font=self.font_section,
             bg=self.palette['panel'],
             fg=self.palette['text'],
             anchor='w',
         ).grid(row=0, column=0, sticky='w')
-        self.attack_status_label = tk.Label(self.grid_header, font=self.font_badge, padx=7, pady=3)
-        self.attack_status_label.grid(row=0, column=1, padx=(6, 0))
-        self.mtd_status_label = tk.Label(self.grid_header, font=self.font_badge, padx=7, pady=3)
-        self.mtd_status_label.grid(row=0, column=2, padx=(6, 0))
-        
+
         """
         ON-GRID DISPLAY
         """
@@ -302,6 +306,7 @@ class case_display:
         self.grid_diagram_bbox = self.sys_canvas.bbox('grid_diagram')
         self.sys_canvas.bind('<Configure>', self._center_grid_diagram)
         self.display_window.after_idle(self._center_grid_diagram)
+        self.display_window.after(100, self._auto_scale_grid)
 
         """
         OFF-GRID DISPLAY
@@ -328,7 +333,7 @@ class case_display:
 
         tk.Label(
             logo_header,
-            text='Operations',
+            text='操作',
             font=self.font_panel_section,
             bg=self.palette['panel'],
             fg=self.palette['text'],
@@ -345,7 +350,7 @@ class case_display:
         self.label_att = tk.Label(
             control_frame,
             font=self.font_panel_label,
-            text='Attack Type',
+            text='攻击类型',
             bg=self.palette['panel'],
             fg=self.palette['muted'],
             anchor='w',
@@ -369,7 +374,7 @@ class case_display:
         self.mtd_on = tk.IntVar()
         self.check_mtd = ttk.Checkbutton(
             control_frame,
-            text='MTD Trigger',
+            text='MTD 触发',
             variable=self.mtd_on,
             onvalue=1,
             offvalue=0,
@@ -379,7 +384,7 @@ class case_display:
 
         self.button_pause = ttk.Button(
             control_frame,
-            text='Pause',
+            text='暂停',
             command=self.pause,
             style='Primary.TButton',
         )
@@ -390,18 +395,18 @@ class case_display:
         metric_frame.columnconfigure(0, weight=1)
         tk.Label(
             metric_frame,
-            text='Live Metrics',
+            text='实时指标',
             font=self.font_panel_section,
             bg=self.palette['panel'],
             fg=self.palette['text'],
             anchor='w',
         ).grid(row=0, column=0, sticky='ew', pady=(0, 6))
 
-        self.label_power_active_ = self._metric_row(metric_frame, 1, 'Active Load', 'MW')
-        self.label_power_reactive_ = self._metric_row(metric_frame, 2, 'Reactive Load', 'MVAr')
-        self.label_power_loss_ = self._metric_row(metric_frame, 3, 'Power Loss', 'MW')
-        self.label_residual_ = self._metric_row(metric_frame, 4, 'BDD Residual', '')
-        self.label_threshold_ = self._metric_row(metric_frame, 5, 'BDD Threshold', '')
+        self.label_power_active_ = self._metric_row(metric_frame, 1, '有功负荷', 'MW')
+        self.label_power_reactive_ = self._metric_row(metric_frame, 2, '无功负荷', 'MVAr')
+        self.label_power_loss_ = self._metric_row(metric_frame, 3, '有功损耗', 'MW')
+        self.label_residual_ = self._metric_row(metric_frame, 4, 'BDD 残差', '')
+        self.label_threshold_ = self._metric_row(metric_frame, 5, 'BDD 阈值', '')
 
         """
         Authorship
@@ -414,7 +419,7 @@ class case_display:
 
         copyright_label = tk.Label(
             self.frame_mea,
-            text='Power System Visualization Demo\nCopyright (c) 2026 Wangkun Xu\nAll rights reserved.',
+            text='电力系统可视化演示\n版权所有 (c) 2026 Wangkun Xu\n保留所有权利。',
             font=self.font_panel_footer,
             bg=self.palette['panel'],
             fg=self.palette['muted'],
@@ -441,7 +446,7 @@ class case_display:
         chart_header.columnconfigure(0, weight=1)
         tk.Label(
             chart_header,
-            text='BDD Residual History',
+            text='BDD 残差历史',
             font=self.font_section,
             bg=self.palette['panel'],
             fg=self.palette['text'],
@@ -458,10 +463,10 @@ class case_display:
         self.figure_canvas.get_tk_widget().grid(row=1, column=0, sticky='ew')
         # Call color map: Display different color based on the power flow
         self.color_map()
-        self._set_badge(self.run_status_label, 'Starting', 'idle')
-        self._set_badge(self.bdd_status_label, 'BDD Clear', 'ok')
-        self._set_badge(self.attack_status_label, 'No Attack', 'idle')
-        self._set_badge(self.mtd_status_label, 'MTD Off', 'idle')
+        self._set_badge(self.run_status_label, '启动中', 'idle')
+        self._set_badge(self.bdd_status_label, 'BDD 正常', 'ok')
+        self._set_badge(self.attack_status_label, '无攻击', 'idle')
+        self._set_badge(self.mtd_status_label, 'MTD 关闭', 'idle')
         self.label_threshold_['text'] = f'{np.round(self.case_env.bdd_threshold, 2)}'
         # Call display measurement
         self.show_mea()
@@ -557,6 +562,32 @@ class case_display:
         self.sys_canvas.move('grid_diagram', dx, dy)
         self.grid_diagram_offset = target_offset
 
+    def _auto_scale_grid(self):
+        """Scale the on-grid diagram to fit the canvas, then re-centre it."""
+        bbox = self.sys_canvas.bbox('grid_diagram')
+        if bbox is None:
+            return
+        x1, y1, x2, y2 = bbox
+        diagram_w = x2 - x1
+        diagram_h = y2 - y1
+        if diagram_w <= 0 or diagram_h <= 0:
+            return
+
+        canvas_w = self.sys_canvas.winfo_width()
+        canvas_h = self.sys_canvas.winfo_height()
+        margin = 16
+        available_w = canvas_w - 2 * margin
+        available_h = canvas_h - self.grid_legend_bottom - 2 * margin
+        if available_w <= 0 or available_h <= 0:
+            return
+
+        scale = min(available_w / diagram_w, available_h / diagram_h, 1.0)
+        if scale < 1.0:
+            self.sys_canvas.scale('grid_diagram', 0, 0, scale, scale)
+            self.grid_diagram_bbox = self.sys_canvas.bbox('grid_diagram')
+
+        self._center_grid_diagram()
+
     def _draw_grid_legend(self):
         x1, y1, x2, y2 = 16, 8, 554, 42
         self.sys_canvas.create_rectangle(
@@ -572,7 +603,7 @@ class case_display:
         self.sys_canvas.create_text(
             x1 + 12,
             y1 + 17,
-            text='Legend',
+            text='图例',
             anchor='w',
             fill=self.palette['text'],
             font=self.font_badge,
@@ -580,10 +611,10 @@ class case_display:
         )
 
         legend_items = [
-            (94, 'Normal', self.palette['normal'], 'line'),
-            (208, 'High', self.palette['warning'], 'line'),
-            (306, 'Alarm', self.palette['alarm'], 'line'),
-            (416, 'FDI bus', self.palette['alarm'], 'bus'),
+            (94, '正常', self.palette['normal'], 'line'),
+            (208, '偏高', self.palette['warning'], 'line'),
+            (306, '告警', self.palette['alarm'], 'line'),
+            (416, 'FDI 母线', self.palette['alarm'], 'bus'),
         ]
         y = y1 + 17
         for x, text, color, kind in legend_items:
@@ -632,7 +663,7 @@ class case_display:
         key_canvas.create_text(
             50,
             12,
-            text='Residual',
+            text='残差',
             anchor='w',
             fill=self.palette['muted'],
             font=self.font_label,
@@ -649,7 +680,7 @@ class case_display:
         key_canvas.create_text(
             184,
             12,
-            text='Threshold',
+            text='阈值',
             anchor='w',
             fill=self.palette['muted'],
             font=self.font_label,
@@ -681,7 +712,7 @@ class case_display:
 
     def _event_style(self, event_type):
         styles = {
-            self.att_choice[1]: ('Random', '#9333ea', (2, 2)),
+            self.att_choice[1]: ('随机', '#9333ea', (2, 2)),
             self.att_choice[2]: ('FDI', '#4f46e5', (5, 2)),
             'MTD': ('MTD', self.palette['warning'], (1, 2)),
         }
@@ -721,6 +752,11 @@ class case_display:
             return self.palette['warning']
         color_idx = min(self.color_no - 1, max(0, int(ratio * (self.color_no - 1))))
         return self.color_map_list[color_idx]
+
+    def _flow_text(self, ratio):
+        """Branch-flow label, hidden when below the clutter threshold."""
+        percent = int(ratio * 100)
+        return f'{percent}%' if percent >= self.line_text_threshold else ''
 
     def opf_loop(self):
         """
@@ -878,12 +914,12 @@ class case_display:
         self.sub.set_facecolor(self.palette['panel'])
         self.sub.set_axisbelow(True)
         self._draw_event_markers(ticks_start, ticks_end)
-        self.sub.plot(residual_summary, label='Residual', color=self.palette['normal'], zorder=3)
+        self.sub.plot(residual_summary, label='残差', color=self.palette['normal'], zorder=3)
         self.sub.hlines(
             xmin=0,
             xmax=max(len(residual_summary)-1, 0),
             y=self.case_env.bdd_threshold,
-            label='Threshold',
+            label='阈值',
             color=self.palette['alarm'],
             linestyles='--',
             zorder=2,
@@ -926,24 +962,24 @@ class case_display:
 
         is_alarm = self.residual >= self.case_env.bdd_threshold
         self.label_residual_.config(fg=self.palette['alarm'] if is_alarm else self.palette['text'])
-        self._set_badge(self.run_status_label, 'Running' if self.opf_success else 'OPF Failed', 'ok' if self.opf_success else 'alarm')
-        self._set_badge(self.bdd_status_label, 'BDD Alarm' if is_alarm else 'BDD Clear', 'alarm' if is_alarm else 'ok')
+        self._set_badge(self.run_status_label, '运行中' if self.opf_success else 'OPF 失败', 'ok' if self.opf_success else 'alarm')
+        self._set_badge(self.bdd_status_label, 'BDD 告警' if is_alarm else 'BDD 正常', 'alarm' if is_alarm else 'ok')
 
         attack_mode = self.att_select.get()
         if attack_mode == self.att_choice[0]:
-            self._set_badge(self.attack_status_label, 'No Attack', 'idle')
+            self._set_badge(self.attack_status_label, '无攻击', 'idle')
         elif attack_mode == self.att_choice[1]:
-            self._set_badge(self.attack_status_label, 'Random Attack', 'attack')
+            self._set_badge(self.attack_status_label, '随机攻击', 'attack')
         else:
-            self._set_badge(self.attack_status_label, 'FDI Attack', 'attack')
+            self._set_badge(self.attack_status_label, 'FDI 攻击', 'attack')
 
         if self.mtd_on.get() == 1:
-            self._set_badge(self.mtd_status_label, 'MTD Active', 'warn')
+            self._set_badge(self.mtd_status_label, 'MTD 激活', 'warn')
         else:
-            self._set_badge(self.mtd_status_label, 'MTD Off', 'idle')
+            self._set_badge(self.mtd_status_label, 'MTD 关闭', 'idle')
 
         load_index = getattr(self.case_env, 'current_load_index', '--')
-        self.opf_label.config(text=f'OPF {self.opf_idx} | Load {load_index}')
+        self.opf_label.config(text=f'OPF {self.opf_idx} | 负荷 {load_index}')
         
         """
         ON-grid measurement update
@@ -969,7 +1005,7 @@ class case_display:
                 self.sys_canvas.itemconfig(
                     tagOrId=f'line_text_below_{i}',
                     fill=actual_color,
-                    text=f'{int(brh_ratio_actual*100)}%',
+                    text=self._flow_text(brh_ratio_actual),
                     font=self.font_grid_small,
                 )
 
@@ -988,14 +1024,14 @@ class case_display:
                 self.sys_canvas.itemconfig(
                     tagOrId=f'line_text_below_{i}',
                     fill=actual_color,
-                    text=f'{int(brh_ratio_actual*100)}%',
+                    text=self._flow_text(brh_ratio_actual),
                     font=self.font_grid_small,
                 )
                 # Attack
                 self.sys_canvas.itemconfig(
                     tagOrId=f'line_text_above_{i}',
                     fill=self.palette['attack'],
-                    text=f'{int(brh_ratio*100)}%',
+                    text=self._flow_text(brh_ratio),
                     font=self.font_grid_small,
                 )
 
@@ -1039,12 +1075,12 @@ class case_display:
         if self.is_pause == False:
             # Run -> Pause
             self.is_pause = True
-            self.button_pause.config(text='Continue')
-            self._set_badge(self.run_status_label, 'Paused', 'idle')
+            self.button_pause.config(text='继续')
+            self._set_badge(self.run_status_label, '已暂停', 'idle')
         else:
             # Pause -> Run
             self.is_pause = False
-            self.button_pause.config(text='Pause')
+            self.button_pause.config(text='暂停')
             # Recall the function to continue
             self.show_mea()
             
@@ -1059,22 +1095,22 @@ def os_config():
 
 if __name__ == "__main__":
     # Instance power env
-    case_name = 'case14'
-    case = case14()
-    case = gen_case(case, 'case14')  # Modify the case
-    
+    case_name = 'case30'
+    case = case30()
+    case = gen_case(case, 'case30')  # Modify the case
+
     # Define measurement index
     mea_idx, no_mea, noise_sigma = define_mea_idx_noise(case, 'RTU')
-    
+
     # Generate load if it does not exist
-    _, _ = gen_load(case, 'case14')
-    
+    _, _ = gen_load(case, 'case30')
+
     # Instance the class
     case_env = power_env(case = case, case_name = case_name, noise_sigma = noise_sigma, idx = mea_idx, fpr = 0.05)
-    
+
     # Define the Tkinter mainloop
     root = tk.Tk()
-    root.title('IEEE ' + case_name + ' system')
+    root.title('30 节点模拟电网系统')
 
     #logo_image = os_config()
     #root.iconbitmap(logo_image)

@@ -64,7 +64,21 @@ def gen_case(case, case_name):
         case['gencost'][:,3] = 2   # Linear cost
         case['gencost'][:,4] = case['gencost'][:,5]  # Linear cost
         case['gencost'][:,5] = case['gencost'][:,6]  # Constant cost
-    
+
+    elif case_name == 'case30':
+        """
+        case30 (simulated domestic grid):
+            1. Add a small load on the zero-load non-ref buses;
+            2. Keep the existing branch RATE_A limits (already realistic);
+            3. Keep the existing generation cost.
+        """
+
+        # Add a small load on the zero-load non-ref buses
+        for i in range(len(case['bus'])):
+            if case['bus'][i,PD] == 0 and i != ref_index[0]:
+                case['bus'][i,PD] = 5
+                case['bus'][i,QD] = 2     # An arbitrary value
+
     return case
 
 def gen_load(case, case_name):
@@ -87,37 +101,60 @@ def gen_load(case, case_name):
     else:
         # Generate load
         print(f'No load data found, generating load...')
-        load_raw_dir = "src/load_normalize_clean.csv"
-        if not exists(load_raw_dir):
-            raise FileNotFoundError(
-                f"Missing raw load data: {load_raw_dir}. "
-                "Download the data from the README and copy it into src, "
-                "or provide pre-generated load_active.npy and load_reactive.npy "
-                f"under src/{case_name}/load/."
-            )
-        load_raw = pd.read_csv(load_raw_dir)
-        load_active = []
-        load_reactive = []
-        for i in range(len(case['bus'])):
-            # Active power
-            load_active_ = load_raw.iloc[:,i+1].values
-            load_active_max_ = np.max(load_active_)
-            load_active_max = case['bus'][i,PD]     # rated power in the case file
-            print(f'Defualt load in case file:" {load_active_max}')
-            # Rescale
-            load_active_ = load_active_ * load_active_max/load_active_max_
-            load_active.append(load_active_)
-            # Reactive power
-            pf = 0.9+2*(1-0.95)*np.random.rand(len(load_raw)) # PF: 0.9-1.0
-            Q_P = np.tan(np.arccos(pf))                       # Q to P ratio
-            load_reactive_= load_active_*Q_P
-            
-            load_reactive.append(load_reactive_)
-        
-        load_active = np.array(load_active).T
-        load_reactive = np.array(load_reactive).T
-        
+        if case_name == 'case14':
+            load_raw_dir = "src/load_normalize_clean.csv"
+            if not exists(load_raw_dir):
+                raise FileNotFoundError(
+                    f"Missing raw load data: {load_raw_dir}. "
+                    "Download the data from the README and copy it into src, "
+                    "or provide pre-generated load_active.npy and load_reactive.npy "
+                    f"under src/{case_name}/load/."
+                )
+            load_raw = pd.read_csv(load_raw_dir)
+            load_active = []
+            load_reactive = []
+            for i in range(len(case['bus'])):
+                # Active power
+                load_active_ = load_raw.iloc[:,i+1].values
+                load_active_max_ = np.max(load_active_)
+                load_active_max = case['bus'][i,PD]     # rated power in the case file
+                print(f'Defualt load in case file:" {load_active_max}')
+                # Rescale
+                load_active_ = load_active_ * load_active_max/load_active_max_
+                load_active.append(load_active_)
+                # Reactive power
+                pf = 0.9+2*(1-0.95)*np.random.rand(len(load_raw)) # PF: 0.9-1.0
+                Q_P = np.tan(np.arccos(pf))                       # Q to P ratio
+                load_reactive_= load_active_*Q_P
+
+                load_reactive.append(load_reactive_)
+
+            load_active = np.array(load_active).T
+            load_reactive = np.array(load_reactive).T
+
+        else:
+            # Synthetic daily load profile for cases without a raw load CSV
+            no_samples = 288
+            t = np.linspace(0, 24, no_samples)
+            load_active = []
+            load_reactive = []
+            for i in range(len(case['bus'])):
+                base = case['bus'][i, PD]
+                phase = 2 * np.pi * np.random.rand()
+                profile = 0.62 + 0.13 * np.sin(2*np.pi*t/24 + phase) \
+                            + 0.04 * np.sin(4*np.pi*t/24 + 2*phase)
+                profile = np.clip(profile + 0.02 * np.random.randn(no_samples), 0.45, 0.85)
+                load_active_ = base * profile
+                load_active.append(load_active_)
+
+                pf = 0.9 + 0.1 * np.random.rand(no_samples)
+                Q_P = np.tan(np.arccos(pf))
+                load_reactive.append(load_active_ * Q_P)
+
+            load_active = np.array(load_active).T
+            load_reactive = np.array(load_reactive).T
+
         np.save(load_active_dir, load_active, allow_pickle=True)
         np.save(load_reactive_dir, load_reactive, allow_pickle=True)     # (sample,bus)
-    
+
     return load_active, load_reactive

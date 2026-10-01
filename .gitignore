@@ -131,3 +131,24 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .DS_Store
+
+# IDE - JetBrains / PyCharm
+.idea/
+
+# Visual Studio Code
+.vscode/
+
+# Claude Code (local assistant state)
+.claude/
+
+# Windows system / temporary files
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.tmp
+*.bak
+~$*
+
+# 本地备份 / 副本文件
+*-副本.py
+*副本*

@@ -28,6 +28,10 @@ class power_env(FDI):
             small_load_line = [15,18,19]                             # Reduce the active line flow limit in lines with low power loading rate
             case['branch'][small_load_line,RATE_A] = 20
             case['gencost'][1:,4] = 30          # Set the non-ref generator bus linear cost
+        elif case_name == 'case30':
+            # The 30-bus case already ships realistic RATE_A limits and generation
+            # cost, so no additional tuning is required.
+            pass
             
         # Add new attribute
         # self.case = case

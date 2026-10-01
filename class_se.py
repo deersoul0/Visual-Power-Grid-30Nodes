@@ -158,13 +158,19 @@ class SE:
         """
         pf = result['branch'][:,PF]/self.case['baseMVA']
         pt = result['branch'][:,PT]/self.case['baseMVA']
-        pi = (self.Cg@result['gen'][:,PG] - result['bus'][:,PD])/self.case['baseMVA']
         vang = result['bus'][:, VA]*np.pi/180             # In radian
-        
+        vmag = result['bus'][:, VM]
+
+        # Bus injection computed consistently with h_x (Ybus-based) so that the
+        # honest measurement residual follows chi^2.  "gen - load" would ignore
+        # line charging / shunts and bias the residual on meshed grids (e.g. 30 buses).
+        v = vmag * np.exp(1j*vang)
+        si = np.diag(v) @ np.conj(self.Ybus) @ np.conj(v)
+        pi = np.real(si)
+        qi = np.imag(si)
+
         qf = result['branch'][:,QF]/self.case['baseMVA']
         qt = result['branch'][:,QT]/self.case['baseMVA']
-        qi = (self.Cg@result['gen'][:,QG] - result['bus'][:,QD])/self.case['baseMVA']
-        vmag = result['bus'][:, VM]
         
         z = np.concatenate([pf, pt, pi, vang, qf, qt, qi, vmag], axis = 0)
         
