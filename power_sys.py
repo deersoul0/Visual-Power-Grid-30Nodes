@@ -14,6 +14,7 @@ from config_mea_idx import define_mea_idx_noise
 from config_se import se_config, opt
 import copy
 from gen_data import gen_case, gen_load
+from dispatch import run_opf_robust
 
 class power_env(FDI):
     def __init__(self, case, case_name, noise_sigma, idx, fpr):
@@ -60,7 +61,7 @@ class power_env(FDI):
         """
         Rewrite the run_opf function to directly read OPF index
         """
-        
+
         case_opf = copy.deepcopy(self.case)
         if 'opf_idx' in kwargs.keys():
             # Specify the index
@@ -68,16 +69,20 @@ class power_env(FDI):
             self.current_load_index = load_idx
             load_active_ = self.load_active[load_idx]
             load_reactive_ = self.load_reactive[load_idx]
-        
+
             case_opf['bus'][:,PD] = load_active_
             case_opf['bus'][:,QD] = load_reactive_
         else:
             # run the default
             self.current_load_index = None
             pass
-        
-        result = runopf(case_opf, opt)
-        
+
+        # 优先使用自研「经济调度 + 交流潮流」两段式 OPF（PyPower 自带 PIPS 求解器
+        # 对部分网络结构数值不稳定），失败时回退到 pypower.runopf。
+        result = run_opf_robust(case_opf)
+        if not result['success']:
+            result = runopf(case_opf, opt)
+
         return result
 
 """

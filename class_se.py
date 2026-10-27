@@ -23,7 +23,16 @@ import scipy
 from config_mea_idx import define_mea_idx_noise
 from config_se import se_config, opt
 import copy
-from scipy.stats.distributions import chi2
+from scipy.special import gammaincinv
+
+
+def chi2inv(p, df):
+    """卡方分布逆 CDF（ppf），等价于 scipy.stats.chi2.ppf(p, df)。
+
+    实现为 chi2.ppf(p, df) = 2 * gammaincinv(df/2, p)，避免依赖 scipy.stats
+    （其部分原生扩展在部分 Windows 环境下会被应用控制策略拦截而无法导入）。
+    """
+    return 2.0 * gammaincinv(df / 2.0, p)
 
 class SE:
     def __init__(self, case, noise_sigma, idx, fpr):
@@ -73,7 +82,7 @@ class SE:
         self.R_inv = np.diag(1/self.noise_sigma**2)        # R^-1 
         
         DoF = self.no_mea - 2*(self.no_bus - 1)            # Degree of Freedom
-        self.bdd_threshold = chi2.ppf(1-fpr, df = DoF)     # BDD detection threshold
+        self.bdd_threshold = chi2inv(1-fpr, DoF)           # BDD detection threshold
         
         """
         Incidence Matrix
